@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resident Dashboard | WasteGuard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand section-title" href="index.html">WasteGuard</a>
+            <div class="navbar-nav ms-auto">
+                <span class="nav-link">Resident Portal</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="glass-card">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h3 id="residentName">Loading...</h3>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="refreshData()">🔄 Refresh</button>
+                    </div>
+                    
+                    <div id="dashboardContent">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">Loading your dashboard...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        let currentResident = null;
+
+        // Get URL parameters
+        function getUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                door: params.get('door'),
+                name: params.get('name')
+            };
+        }
+
+        // Load resident data
+        async function loadResidentData() {
+            const { door, name } = getUrlParams();
+            
+            if (!door || !name) {
+                document.getElementById('dashboardContent').innerHTML = 
+                    '<div class="alert alert-danger">❌ Missing login information</div>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/resident/by-door-name?door=${door}&name=${name}`);
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    currentResident = data.resident;
+                    displayDashboard(data.resident);
+                } else {
+                    throw new Error(data.error || 'Failed to load data');
+                }
+            } catch (error) {
+                document.getElementById('dashboardContent').innerHTML = 
+                    `<div class="alert alert-danger">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Display dashboard
+        function displayDashboard(resident) {
+            document.getElementById('residentName').textContent = `Hello, ${resident.name}!`;
+            
+            let html = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="glass-card mb-3">
+                            <h5>📊 Your Status</h5>
+                            <p><strong>Door Number:</strong> ${resident.door_number}</p>
+                            <p><strong>Email:</strong> ${resident.email}</p>
+                            <p><strong>Warnings:</strong> ${resident.warning_count}/3</p>
+                            <p><strong>Total Violations:</strong> ${resident.total_violations}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="glass-card mb-3">
+                            <h5>💳 Fine Status</h5>
+            `;
+            
+            if (resident.fine_status === 'Pending') {
+                html += `
+                    <div class="alert alert-danger">
+                        <strong>💳 Fine Imposed: ₹${resident.fine_amount}</strong><br>
+                        Status: Pending
+                    </div>
+                    <button class="btn btn-warning w-100 mt-2">Pay Fine</button>
+                `;
+            } else if (resident.fine_status === 'Paid') {
+                html += '<div class="alert alert-success"><strong>✅ Status: All Clear</strong><br>Payment received - warnings reset</div>';
+            } else if (resident.strict_warning) {
+                html += '<div class="alert alert-warning"><strong>🚨 FINAL WARNING</strong><br>Next violation = ₹500 fine</div>';
+            } else if (resident.warning_count === 1) {
+                html += '<div class="alert alert-info"><strong>⚠ Warning Level: 1/3</strong><br>Please follow waste segregation guidelines</div>';
+            } else if (resident.warning_count === 2) {
+                html += '<div class="alert alert-warning"><strong>⚠ Warning Level: 2/3</strong><br>Next violation will be escalated</div>';
+            } else {
+                html += '<div class="alert alert-success"><strong>✅ No Active Warnings</strong><br>Keep up the good work!</div>';
+            }
+            
+            html += '</div></div></div>';
+            
+            // Add recent violations section
+            html += `
+                <div class="mt-4">
+                    <div class="glass-card">
+                        <h5>📋 Recent Activity</h5>
+                        <div class="alert alert-info">
+                            <strong>📧 Email Notifications:</strong> You will receive email alerts for all violations and fine updates.
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('dashboardContent').innerHTML = html;
+        }
+
+        // Refresh data
+        async function refreshData() {
+            document.getElementById('dashboardContent').innerHTML = 
+                '<div class="text-center"><div class="spinner-border"></div> Refreshing...</div>';
+            await loadResidentData();
+        }
+
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', loadResidentData);
+    </script>
+</body>
+</html>

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WasteGuard | Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .auth-container {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .auth-card {
+            width: 100%;
+            max-width: 450px;
+            padding: 2rem;
+        }
+        .nav-pills .nav-link {
+            color: #ccc;
+        }
+        .nav-pills .nav-link.active {
+            background-color: #0d6efd;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container auth-container">
+        <div class="glass-card auth-card">
+            <h2 class="text-center mb-4 section-title" id="authTitle">Login</h2>
+            <p class="text-center text-secondary mb-4">Welcome to WasteGuard System</p>
+            
+            <ul class="nav nav-pills nav-justified mb-4" id="authTabs">
+                <li class="nav-item">
+                    <button class="nav-link active" onclick="switchTab('login')">Login</button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" onclick="switchTab('register')">Register</button>
+                </li>
+            </ul>
+
+            <form id="authForm" onsubmit="handleAuth(event)">
+                <!-- Role Selection (Only needed for Registration) -->
+                <div class="mb-3" id="roleSelectionField" style="display: none;">
+                    <label class="form-label text-light">Registering As</label>
+                    <select class="form-select bg-dark text-light border-secondary" id="roleSelect" onchange="toggleFields()">
+                        <option value="" disabled selected>Select your role</option>
+                        <option value="Resident">Resident</option>
+                        <option value="Worker">Worker</option>
+                        <option value="Head">Head</option>
+                    </select>
+                </div>
+
+                <!-- Registration specific fields -->
+                <div id="registerFields" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label text-light">Full Name</label>
+                        <input type="text" class="form-control bg-dark text-light border-secondary" id="nameInput">
+                    </div>
+                    <div class="mb-3" id="doorNumberField" style="display: none;">
+                        <label class="form-label text-light">Door Number</label>
+                        <input type="text" class="form-control bg-dark text-light border-secondary" id="doorInput" placeholder="e.g. 101">
+                    </div>
+                </div>
+
+                <!-- Common fields -->
+                <div class="mb-3">
+                    <label class="form-label text-light">Email address</label>
+                    <input type="email" class="form-control bg-dark text-light border-secondary" id="emailInput" required placeholder="name@example.com">
+                </div>
+                <div class="mb-4">
+                    <label class="form-label text-light">Password</label>
+                    <input type="password" class="form-control bg-dark text-light border-secondary" id="passwordInput" required placeholder="Enter password">
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-2" id="submitBtn">Login</button>
+            </form>
+            <div id="authAlert" class="alert mt-3" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentMode = 'login'; // login or register
+
+        function switchTab(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            document.getElementById('authTitle').innerText = mode === 'login' ? 'Login' : 'Register';
+            document.getElementById('submitBtn').innerText = mode === 'login' ? 'Login' : 'Register';
+            
+            if (mode === 'register') {
+                document.getElementById('registerFields').style.display = 'block';
+                document.getElementById('roleSelectionField').style.display = 'block';
+                document.getElementById('nameInput').required = true;
+                document.getElementById('roleSelect').required = true;
+            } else {
+                document.getElementById('registerFields').style.display = 'none';
+                document.getElementById('roleSelectionField').style.display = 'none';
+                document.getElementById('nameInput').required = false;
+                document.getElementById('roleSelect').required = false;
+            }
+            toggleFields();
+        }
+
+        function toggleFields() {
+            const role = document.getElementById('roleSelect').value;
+            if (currentMode === 'register' && role === 'Resident') {
+                document.getElementById('doorNumberField').style.display = 'block';
+                document.getElementById('doorInput').required = true;
+            } else {
+                document.getElementById('doorNumberField').style.display = 'none';
+                document.getElementById('doorInput').required = false;
+            }
+        }
+
+        async function handleAuth(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+
+            const endpoint = currentMode === 'login' ? '/api/login' : '/api/register';
+            const payload = { email, password };
+
+            if (currentMode === 'register') {
+                const role = document.getElementById('roleSelect').value;
+                const name = document.getElementById('nameInput').value;
+                const doorNumber = document.getElementById('doorInput').value;
+
+                if (!role) {
+                    showAlert('Please select what role you are registering as', 'danger');
+                    return;
+                }
+
+                payload.role = role;
+                payload.name = name;
+                if (role === 'Resident') payload.doorNumber = doorNumber;
+            }
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showAlert(data.message, 'success');
+                    
+                    if (currentMode === 'login') {
+                        // Keep track of the resolved role in local storage
+                        localStorage.setItem('userAuth', JSON.stringify({ ...data.user, role: data.role }));
+                        
+                        // Automatically route them to their personal dashboards
+                        setTimeout(() => {
+                            if (data.role === 'Resident') window.location.href = 'resident.html';
+                            else if (data.role === 'Worker') window.location.href = 'worker.html';
+                            else if (data.role === 'Head') window.location.href = 'head.html';
+                        }, 800);
+                    } else {
+                        // Switch to login tab after success
+                        setTimeout(() => switchTab('login'), 2000);
+                    }
+                } else {
+                    showAlert(data.error || 'Authentication failed', 'danger');
+                }
+            } catch (err) {
+                showAlert('Network error, please try again.', 'danger');
+            }
+        }
+
+        function showAlert(msg, type) {
+            const alertEl = document.getElementById('authAlert');
+            alertEl.className = `alert alert-${type} mt-3`;
+            alertEl.innerText = msg;
+            alertEl.style.display = 'block';
+            setTimeout(() => { alertEl.style.display = 'none'; }, 4000);
+        }
+    </script>
+</body>
+</html>

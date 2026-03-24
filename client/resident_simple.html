@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resident Dashboard | WasteGuard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand section-title" href="index.html">WasteGuard</a>
+            <div class="navbar-nav ms-auto">
+                <span class="nav-link">Resident Portal</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="glass-card">
+                    <h3 class="text-center mb-4">Resident Dashboard</h3>
+                    
+                    <div class="mb-4">
+                        <label class="form-label">Enter Your Details</label>
+                        <div class="row">
+                            <div class="col-md-4 mb-2">
+                                <input type="text" class="form-control" id="doorNumber" placeholder="Door Number">
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <input type="text" class="form-control" id="residentName" placeholder="Your Name">
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <button class="btn btn-primary w-100" onclick="loadMyData()">Load Data</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="dashboardContent">
+                        <div class="text-center">
+                            <p>Enter your door number and name to view your dashboard</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        let currentResident = null;
+
+        // Load resident data
+        async function loadMyData() {
+            const doorNumber = document.getElementById('doorNumber').value;
+            const residentName = document.getElementById('residentName').value;
+            const contentDiv = document.getElementById('dashboardContent');
+            
+            if (!doorNumber || !residentName) {
+                contentDiv.innerHTML = '<div class="alert alert-warning">Please enter both door number and name</div>';
+                return;
+            }
+
+            contentDiv.innerHTML = '<div class="text-center"><div class="spinner-border"></div> Loading...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/resident/by-door-name?door=${doorNumber}&name=${residentName}`);
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    currentResident = data.resident;
+                    displayDashboard(data.resident);
+                } else {
+                    throw new Error(data.error || 'Failed to load data');
+                }
+            } catch (error) {
+                contentDiv.innerHTML = `<div class="alert alert-danger">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Display dashboard
+        function displayDashboard(resident) {
+            let html = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="glass-card mb-3">
+                            <h5>📊 Your Status</h5>
+                            <p><strong>Door Number:</strong> ${resident.door_number}</p>
+                            <p><strong>Name:</strong> ${resident.name}</p>
+                            <p><strong>Email:</strong> ${resident.email}</p>
+                            <p><strong>Warnings:</strong> ${resident.warning_count}/3</p>
+                            <p><strong>Total Violations:</strong> ${resident.total_violations}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="glass-card mb-3">
+                            <h5>💳 Fine Status</h5>
+            `;
+            
+            if (resident.fine_status === 'Pending') {
+                html += `
+                    <div class="alert alert-danger">
+                        <strong>💳 Fine Imposed: ₹${resident.fine_amount}</strong><br>
+                        Status: Pending
+                    </div>
+                    <button class="btn btn-warning w-100 mt-2">Pay Fine</button>
+                `;
+            } else if (resident.fine_status === 'Paid') {
+                html += '<div class="alert alert-success"><strong>✅ Status: All Clear</strong><br>Payment received - warnings reset</div>';
+            } else if (resident.strict_warning) {
+                html += '<div class="alert alert-warning"><strong>🚨 FINAL WARNING</strong><br>Next violation = ₹500 fine</div>';
+            } else if (resident.warning_count === 1) {
+                html += '<div class="alert alert-info"><strong>⚠ Warning Level: 1/3</strong><br>Please follow waste segregation guidelines</div>';
+            } else if (resident.warning_count === 2) {
+                html += '<div class="alert alert-warning"><strong>⚠ Warning Level: 2/3</strong><br>Next violation will be escalated</div>';
+            } else {
+                html += '<div class="alert alert-success"><strong>✅ No Active Warnings</strong><br>Keep up the good work!</div>';
+            }
+            
+            html += '</div></div></div>';
+            
+            // Add recent violations section
+            html += `
+                <div class="mt-4">
+                    <div class="glass-card">
+                        <h5>📋 Recent Activity</h5>
+                        <div class="alert alert-info">
+                            <strong>📧 Email Notifications:</strong> You will receive email alerts for all violations and fine updates.
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('dashboardContent').innerHTML = html;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Head Dashboard | WasteGuard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .table-glass {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            overflow: hidden;
+        }
+
+        .table-glass th {
+            background: rgba(255, 255, 255, 0.1);
+            color: #764ba2;
+            border: none;
+        }
+
+        .table-glass td {
+            color: #ffffff !important;
+            background: transparent !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            vertical-align: middle;
+            padding: 1rem 0.75rem;
+        }
+
+        .qr-thumb {
+            width: 100px;
+            border: 2px solid white;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand section-title" href="index.html">WasteGuard</a>
+            <div class="navbar-nav ms-auto">
+                <span class="nav-link">Head Administrator</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-5">
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <h2 class="mb-4">Violation Monitoring</h2>
+            </div>
+            <div class="col-md-4 text-end">
+                <div class="glass-card p-3" style="display: inline-block;">
+                    <small class="d-block mb-2">My Payment QR</small>
+                    <img id="headQR" src="" alt="Head QR" class="qr-thumb">
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive table-glass">
+            <table class="table table-dark table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Resident Name</th>
+                        <th>Door</th>
+                        <th>Warnings</th>
+                        <th>Latest Violation</th>
+                        <th>Action</th>
+                        <th>Payment Status</th>
+                    </tr>
+                </thead>
+                <tbody id="violationTable">
+                    <!-- Data will be loaded via JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        let currentHeadData = null;
+
+        // Parse URL parameters for token-based access
+        function getUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                door: params.get('door'),
+                token: params.get('token')
+            };
+        }
+
+        // Validate head access and load data
+        async function loadHeadData() {
+            const { door, token } = getUrlParams();
+            
+            if (!door || !token) {
+                // Load general head dashboard (login-based)
+                await loadGeneralHeadData();
+                return;
+            }
+
+            try {
+                // Validate token for specific resident access
+                const res = await fetch(`${API_BASE}/head/validate?door=${door}&token=${token}`);
+                if (!res.ok) {
+                    throw new Error('Invalid token');
+                }
+
+                const data = await res.json();
+                currentHeadData = data;
+                displaySpecificResident(data, door, token);
+            } catch (err) {
+                console.error(err);
+                // Fallback to general head dashboard
+                await loadGeneralHeadData();
+            }
+        }
+
+        // Load general head dashboard (all residents)
+        async function loadGeneralHeadData() {
+            try {
+                const res = await fetch(`${API_BASE}/head`);
+                const data = await res.json();
+
+                document.getElementById('headQR').src = data.qrCodeData;
+
+                const table = document.getElementById('violationTable');
+                table.innerHTML = data.residents.map(resident => `
+                    <tr>
+                        <td class="fw-bold">${resident.name}</td>
+                        <td class="text-info font-monospace">${resident.door_number}</td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <span class="badge ${resident.total_violations >= 4 ? 'bg-danger' : 'bg-warning'} me-2">
+                                    ${resident.warning_count}/${resident.total_violations}
+                                </span>
+                                ${resident.strict_warning ? '<span class="badge bg-danger">Final</span>' : ''}
+                                resident.total_violations === 4 ? '4th Violation' :
+                                resident.total_violations === 5 ? '5th Violation' :
+                                    resident.total_violations + ' Violations'}
+                                </small>
+                            </div>
+                        </td>
+                        <td>${resident.last_violation ? new Date(resident.last_violation).toLocaleString() : 'N/A'}</td>
+                        <td>
+                            ${getActionButtons(resident)}
+                        </td>
+                        <td>
+                            ${resident.fine_status === 'Paid' ?
+                        '<span class="text-success fw-bold">✓ Payment Successful</span>' :
+                        (resident.fine_status === 'Pending' ?
+                            '<span class="text-danger fw-bold">⚠ Fine Pending</span>' :
+                            (resident.strict_warning ?
+                                '<span class="text-info">Strict Warning Active</span>' :
+                                (resident.total_violations === 1 ? '<span class="text-warning">1st Warning Active</span>' :
+                                    resident.total_violations === 2 ? '<span class="text-warning">2nd Warning Active</span>' :
+                                        resident.total_violations === 3 ? '<span class="text-warning">3rd Violation Recorded</span>' :
+                                            '<span class="text-muted">No Payment Needed</span>')
+                            )
+                        )}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Failed to load dashboard data');
+            }
+        }
+
+        function getActionButtons(res) {
+            if (res.fine_status === 'Paid') return '<span class="text-muted">No action needed</span>';
+
+            if (res.total_violations >= 4 && res.fine_status !== 'Pending') {
+                return `<button class="btn btn-premium btn-sm" onclick="imposeFine('${res.door_number}')">Impose ₹500 Fine</button>`;
+            }
+
+            if (res.total_violations === 3 && !res.strict_warning) {
+                return `<button class="btn btn-warning btn-sm" onclick="sendStrictWarning('${res.door_number}')">Send Strict Warning</button>`;
+            }
+
+            if (res.strict_warning && res.fine_status !== 'Pending') {
+                return '<small class="text-info">Strict Warning Sent</small>';
+            }
+
+            if (res.fine_status === 'Pending') {
+                return '<small class="text-danger">Fine Imposed - Awaiting Payment</small>';
+            }
+
+            // For 1st and 2nd warnings, show specific status
+            if (res.total_violations === 1) {
+                return `<small class="text-warning">1st Warning: ${res.name} (Door ${res.door_number})</small>`;
+            }
+            if (res.total_violations === 2) {
+                return `<small class="text-warning">2nd Warning: ${res.name} (Door ${res.door_number})</small>`;
+            }
+
+            return '<small class="text-muted">Monitoring...</small>';
+        }
+
+        async function sendStrictWarning(door) {
+            await fetch(`${API_BASE}/strict-warning/${door}`, { method: 'POST' });
+            loadData();
+        }
+
+        async function imposeFine(door) {
+            await fetch(`${API_BASE}/impose-fine/${door}`, { method: 'POST' });
+            loadData();
+        }
+
+        loadData();
+        setInterval(loadData, 5000); // Auto refresh
+    </script>
+</body>
+
+</html>

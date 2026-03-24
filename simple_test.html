@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test API</title>
+</head>
+<body>
+    <h1>Testing Resident API</h1>
+    <button onclick="testAPI()">Test API Call</button>
+    <div id="result"></div>
+
+    <script>
+        async function testAPI() {
+            const door = '1';
+            const token = '7788d819015f3dbc2056ed6199dad1d9656b7bc479bbaec12304e744575317a3';
+            
+            try {
+                const response = await fetch(`http://localhost:5000/api/resident/validate?door=${door}&token=${token}`);
+                const data = await response.json();
+                document.getElementById('result').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                console.log('Success:', data);
+            } catch (error) {
+                document.getElementById('result').innerHTML = '<div style="color: red;">Error: ' + error.message + '</div>';
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
